@@ -1,0 +1,213 @@
+/* ================= RESET ================= */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Poppins", "Segoe UI", sans-serif;
+}
+
+/* ================= BACKGROUND ================= */
+body {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  background: linear-gradient(-45deg, #0f172a, #111827, #0f766e, #1d4ed8);
+  background-size: 400% 400%;
+  animation: bgMove 12s ease infinite;
+
+  color: #fff;
+  overflow: hidden;
+}
+
+/* animated background */
+@keyframes bgMove {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* glowing background circles */
+body::before,
+body::after {
+  content: "";
+  position: absolute;
+  width: 500px; /* bigger glow */
+  height: 500px;
+  border-radius: 50%;
+  filter: blur(140px);
+  z-index: 0;
+}
+
+body::before {
+  background: rgba(56, 189, 248, 0.25);
+  top: 5%;
+  left: 10%;
+}
+
+body::after {
+  background: rgba(14, 165, 233, 0.25);
+  bottom: 5%;
+  right: 10%;
+}
+
+/* ================= CONTAINER ================= */
+.container {
+  position: relative;
+  z-index: 1;
+
+  width: 100%;
+  max-width: 1400px; /* bigger width */
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  gap: 120px; /* more spacing */
+  padding: 100px;
+}
+
+/* ================= HERO ================= */
+.hero {
+  flex: 1;
+  animation: fadeUp 1s ease;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero h1 {
+  font-size: 4rem; /* BIGGER TITLE */
+  color: #38bdf8;
+  text-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+}
+
+.hero p {
+  margin-top: 20px;
+  font-size: 1.5rem; /* bigger text */
+  color: #cbd5e1;
+  line-height: 1.9;
+  max-width: 600px;
+}
+
+/* ================= CARD ================= */
+.card {
+  width: 600px; /* bigger card */
+  padding: 70px;
+
+  border-radius: 28px;
+
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+
+  border: 1px solid rgba(255, 255, 255, 0.18);
+
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.6),
+    inset 0 0 30px rgba(255, 255, 255, 0.05);
+
+  transition: 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-10px) scale(1.03);
+  box-shadow:
+    0 30px 80px rgba(56, 189, 248, 0.3);
+}
+
+/* ================= INPUT ================= */
+.input {
+  width: 100%;
+  padding: 20px; /* bigger */
+  margin-top: 18px;
+
+  border-radius: 16px;
+  border: 1px solid #334155;
+
+  background: rgba(15, 23, 42, 0.85);
+  color: white;
+
+  font-size: 1.2rem; /* bigger text */
+  outline: none;
+
+  transition: 0.3s ease;
+}
+
+.input:focus {
+  border: 1px solid #38bdf8;
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.6);
+  transform: scale(1.04);
+}
+
+/* ================= BUTTON ================= */
+.button {
+  width: 100%;
+  padding: 20px;
+  margin-top: 25px;
+
+  border: none;
+  border-radius: 16px;
+
+  background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+  color: #0f172a;
+
+  font-weight: bold;
+  font-size: 1.3rem; /* bigger */
+
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.button:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 30px rgba(56, 189, 248, 0.7);
+}
+
+/* ================= LINK ================= */
+.link {
+  margin-top: 22px;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #94a3b8;
+}
+
+.link a {
+  color: #38bdf8;
+  text-decoration: none;
+}
+
+.link a:hover {
+  color: #0ea5e9;
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+}
+
+/* ================= RESPONSIVE ================= */
+@media (max-width: 768px) {
+  .container {
+    flex-direction: column;
+    text-align: center;
+    padding: 40px;
+  }
+
+  .card {
+    width: 100%;
+    padding: 45px;
+  }
+
+  .hero h1 {
+    font-size: 2.5rem;
+  }
+
+  .hero p {
+    font-size: 1.2rem;
+  }
+}
