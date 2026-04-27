@@ -18,7 +18,7 @@ body {
   animation: bgMove 12s ease infinite;
 
   color: #fff;
-  overflow: hidden;
+
 }
 
 /* animated background */
@@ -29,28 +29,7 @@ body {
 }
 
 /* glowing background circles */
-body::before,
-body::after {
-  content: "";
-  position: absolute;
-  width: 500px; /* bigger glow */
-  height: 500px;
-  border-radius: 50%;
-  filter: blur(140px);
-  z-index: 0;
-}
 
-body::before {
-  background: rgba(56, 189, 248, 0.25);
-  top: 5%;
-  left: 10%;
-}
-
-body::after {
-  background: rgba(14, 165, 233, 0.25);
-  bottom: 5%;
-  right: 10%;
-}
 
 /* ================= CONTAINER ================= */
 .container {
@@ -58,13 +37,13 @@ body::after {
   z-index: 1;
 
   width: 100%;
-  max-width: 1400px; /* bigger width */
+  max-width: 1400px;
 
   display: flex;
   justify-content: space-between;
   align-items: center;
 
-  gap: 120px; /* more spacing */
+  gap: 120px;
   padding: 100px;
 }
 
@@ -86,14 +65,14 @@ body::after {
 }
 
 .hero h1 {
-  font-size: 4rem; /* BIGGER TITLE */
+  font-size: 4rem;
   color: #38bdf8;
   text-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
 }
 
 .hero p {
   margin-top: 20px;
-  font-size: 1.5rem; /* bigger text */
+  font-size: 1.5rem;
   color: #cbd5e1;
   line-height: 1.9;
   max-width: 600px;
@@ -101,7 +80,7 @@ body::after {
 
 /* ================= CARD ================= */
 .card {
-  width: 600px; /* bigger card */
+  width: 600px;
   padding: 70px;
 
   border-radius: 28px;
@@ -120,14 +99,13 @@ body::after {
 
 .card:hover {
   transform: translateY(-10px) scale(1.03);
-  box-shadow:
-    0 30px 80px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 30px 80px rgba(56, 189, 248, 0.3);
 }
 
 /* ================= INPUT ================= */
 .input {
   width: 100%;
-  padding: 20px; /* bigger */
+  padding: 20px;
   margin-top: 18px;
 
   border-radius: 16px;
@@ -136,7 +114,7 @@ body::after {
   background: rgba(15, 23, 42, 0.85);
   color: white;
 
-  font-size: 1.2rem; /* bigger text */
+  font-size: 1.2rem;
   outline: none;
 
   transition: 0.3s ease;
@@ -148,28 +126,41 @@ body::after {
   transform: scale(1.04);
 }
 
-/* ================= BUTTON ================= */
+/* ================= BUTTON (FIXED BIGGER CLICK AREA) ================= */
 .button {
   width: 100%;
-  padding: 20px;
-  margin-top: 25px;
+  min-height: 80px; /* BIGGER CLICK AREA */
+  padding: 28px 24px; /* increased padding */
+
+  margin-top: 28px;
 
   border: none;
-  border-radius: 16px;
+  border-radius: 18px;
 
   background: linear-gradient(135deg, #38bdf8, #0ea5e9);
   color: #0f172a;
 
   font-weight: bold;
-  font-size: 1.3rem; /* bigger */
+  font-size: 1.5rem; /* bigger text */
 
   cursor: pointer;
   transition: 0.3s ease;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  user-select: none;
 }
 
 .button:hover {
   transform: scale(1.08);
   box-shadow: 0 0 30px rgba(56, 189, 248, 0.7);
+}
+
+/* extra click feedback */
+.button:active {
+  transform: scale(1.02);
 }
 
 /* ================= LINK ================= */
@@ -209,5 +200,10 @@ body::after {
 
   .hero p {
     font-size: 1.2rem;
+  }
+
+  .button {
+    min-height: 70px;
+    font-size: 1.3rem;
   }
 }
