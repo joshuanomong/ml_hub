@@ -5,132 +5,219 @@ import Link from "next/link";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithPassword({
+    setMessage("");
+
+    if (!email || !password) {
+      setMessage("Please fill in all fields.");
+      return;
+    }
+
+    setLoading(true);
+
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
+    setLoading(false);
+
     if (error) {
-      alert(error.message);
-    } else {
-      alert("Login successful!");
-      window.location.href = "/dashboard";
+      setMessage(error.message);
+      return;
     }
+
+    if (!data.user?.email_confirmed_at) {
+      await supabase.auth.signOut();
+      setMessage("Please verify your email before logging in.");
+      return;
+    }
+
+    setMessage("Login successful! Redirecting...");
+
+    setTimeout(() => {
+      window.location.href = "/dashboard";
+    }, 800);
   };
 
-  // --- Full Screen Styles ---
   const containerStyle = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    position: "fixed", // Ensures it stays full screen even if parent has padding
+    position: "fixed",
     top: 0,
     left: 0,
     width: "100vw",
     height: "100vh",
-    background: "linear-gradient(135deg, #1e3a8a 0%, #0d9488 100%)", // Rich Blue to Teal gradient
-    fontFamily: "'Inter', -apple-system, sans-serif",
-    margin: 0,
-    padding: 0,
+    background: "linear-gradient(135deg, #0f172a 0%, #111827 50%, #0b1220 100%)",
+    fontFamily: "'Inter', sans-serif",
   };
 
   const cardStyle = {
-    backgroundColor: "rgba(255, 255, 255, 0.95)", // Slightly transparent for a modern look
-    padding: "48px 40px",
-    borderRadius: "16px",
-    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+    backgroundColor: "rgba(17, 24, 39, 0.98)",
+    padding: "40px 36px",
+    borderRadius: "20px",
+    boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
     width: "100%",
     maxWidth: "400px",
     textAlign: "center",
+    border: "1px solid #1e2d45",
+  };
+
+  const iconWrapStyle = {
+    width: "52px",
+    height: "52px",
+    borderRadius: "14px",
+    background: "rgba(56, 201, 240, 0.12)",
+    border: "1px solid rgba(56, 201, 240, 0.25)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    margin: "0 auto 20px",
+    fontSize: "22px",
+    color: "#38c9f0",
   };
 
   const headerStyle = {
-    fontSize: "28px",
-    fontWeight: "800",
-    color: "#111827",
-    margin: "0 0 8px 0",
+    fontSize: "22px",
+    fontWeight: "700",
+    color: "#fff",
+    marginBottom: "6px",
   };
 
   const subHeaderStyle = {
-    fontSize: "14px",
-    color: "#6b7280",
-    marginBottom: "32px",
+    fontSize: "13px",
+    color: "#64748b",
+    marginBottom: "28px",
+  };
+
+  const inputWrapStyle = {
+    position: "relative",
+    marginBottom: "12px",
+    textAlign: "left",
+  };
+
+  const inputIconStyle = {
+    position: "absolute",
+    left: "14px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    fontSize: "16px",
+    color: "#475569",
+    pointerEvents: "none",
   };
 
   const inputStyle = {
     width: "100%",
-    padding: "14px 16px",
-    marginBottom: "16px",
+    padding: "11px 14px 11px 40px",
     borderRadius: "10px",
-    border: "1px solid #e5e7eb",
-    fontSize: "15px",
+    border: "1px solid #1e2d45",
+    background: "#0d1829",
+    color: "white",
     outline: "none",
+    fontSize: "14px",
     boxSizing: "border-box",
-    transition: "border-color 0.2s",
+  };
+
+  const forgotStyle = {
+    display: "block",
+    fontSize: "12px",
+    color: "#38c9f0",
+    textAlign: "right",
+    marginBottom: "16px",
+    marginTop: "-4px",
+    cursor: "pointer",
+    textDecoration: "none",
   };
 
   const buttonStyle = {
     width: "100%",
-    padding: "14px",
-    backgroundColor: "#2563eb",
-    color: "white",
+    padding: "12px",
+    borderRadius: "999px",
+    background: loading ? "rgba(56,201,240,0.3)" : "#38c9f0",
+    color: loading ? "rgba(255,255,255,0.4)" : "#0a2a50",
     border: "none",
-    borderRadius: "10px",
-    fontSize: "16px",
-    fontWeight: "600",
-    cursor: "pointer",
-    marginTop: "8px",
-    transition: "transform 0.1s, background-color 0.2s",
+    fontWeight: "700",
+    fontSize: "0.9rem",
+    cursor: loading ? "not-allowed" : "pointer",
+    letterSpacing: "0.3px",
+    transition: "opacity 0.15s",
   };
 
-  const footerStyle = {
-    marginTop: "24px",
-    fontSize: "14px",
-    color: "#4b5563",
-  };
-
-  const linkStyle = {
-    color: "#2563eb",
-    textDecoration: "none",
-    fontWeight: "600",
+  const messageStyle = {
+    marginTop: "12px",
+    fontSize: "13px",
+    color: message.includes("successful") ? "#34d399" : "#fbbf24",
   };
 
   return (
     <div style={containerStyle}>
       <div style={cardStyle}>
+
+        {/* Icon */}
+        <div style={iconWrapStyle}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+
         <h2 style={headerStyle}>Welcome Back</h2>
-        <p style={subHeaderStyle}>Please enter your details to sign in.</p>
+        <p style={subHeaderStyle}>Sign in to your account</p>
 
-        <input
-          type="email"
-          placeholder="Email Address"
-          style={inputStyle}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        {/* Email input */}
+        <div style={inputWrapStyle}>
+          <span style={inputIconStyle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+          </span>
+          <input
+            type="email"
+            placeholder="Email address"
+            style={inputStyle}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
 
-        <input
-          type="password"
-          placeholder="Password"
-          style={inputStyle}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        {/* Password input */}
+        <div style={inputWrapStyle}>
+          <span style={inputIconStyle}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </span>
+          <input
+            type="password"
+            placeholder="Password"
+            style={inputStyle}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
 
-        <button 
-          onClick={handleLogin} 
+        {/* Forgot password */}
+        <Link href="/forgot-password" style={forgotStyle}>
+          Forgot password?
+        </Link>
+
+        <button
+          onClick={handleLogin}
           style={buttonStyle}
-          onMouseOver={(e) => (e.target.style.backgroundColor = "#1d4ed8")}
-          onMouseOut={(e) => (e.target.style.backgroundColor = "#2563eb")}
-          onMouseDown={(e) => (e.target.style.transform = "scale(0.98)")}
-          onMouseUp={(e) => (e.target.style.transform = "scale(1)")}
+          disabled={loading}
         >
-          Sign In
+          {loading ? "Signing in..." : "Sign In"}
         </button>
 
-        <p style={footerStyle}>
+        {message && <p style={messageStyle}>{message}</p>}
+
+        <p style={{ marginTop: "20px", fontSize: "13px", color: "#475569" }}>
           Don't have an account?{" "}
-          <Link href="/signup" style={linkStyle}>
+          <Link href="/signup" style={{ color: "#38c9f0", fontWeight: "600" }}>
             Sign Up
           </Link>
         </p>
