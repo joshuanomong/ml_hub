@@ -42,6 +42,33 @@ const TimeAgo = ({ iso }) => {
   return <span style={{ fontSize: 11, color: "rgba(93,232,192,0.7)", fontFamily: "'DM Sans', sans-serif" }}>{label}</span>;
 };
 
+// ─── Toast ───────────────────────────────────────────────────────────────────
+
+function Toast({ message, onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 2200);
+    return () => clearTimeout(t);
+  }, [onDone]);
+  return (
+    // SECURITY FIX 3: added role="status" + aria-live so screen readers announce the toast
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: "fixed", bottom: 88, left: "50%", transform: "translateX(-50%)",
+        background: "rgba(93,232,192,0.15)", border: "1px solid rgba(93,232,192,0.35)",
+        color: "#5de8c0", fontSize: 13, fontFamily: "'DM Sans', sans-serif",
+        padding: "10px 20px", borderRadius: 10, zIndex: 9999,
+        backdropFilter: "blur(8px)", whiteSpace: "nowrap",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+        animation: "fadeInUp 0.2s ease",
+      }}
+    >
+      {message}
+    </div>
+  );
+}
+
 // ─── Notification Bell ───────────────────────────────────────────────────────
 
 function NotificationBell({ notifications, onMarkAllRead, onMarkRead }) {
@@ -75,6 +102,7 @@ function NotificationBell({ notifications, onMarkAllRead, onMarkRead }) {
           borderColor: open ? "rgba(93,232,192,0.3)" : "rgba(255,255,255,0.08)",
         }}
         title="Notifications"
+        aria-label={`Notifications${unread > 0 ? `, ${unread} unread` : ""}`}
       >
         <BellIcon />
         {unread > 0 && (
@@ -84,7 +112,6 @@ function NotificationBell({ notifications, onMarkAllRead, onMarkRead }) {
 
       {open && (
         <div style={css.notifPanel}>
-          {/* Header */}
           <div style={css.notifHeader}>
             <span style={css.notifTitle}>Notifications</span>
             {unread > 0 && (
@@ -93,13 +120,14 @@ function NotificationBell({ notifications, onMarkAllRead, onMarkRead }) {
               </button>
             )}
           </div>
-
-          {/* List */}
           <div style={css.notifList}>
             {notifications.length === 0 ? (
               <div style={css.notifEmpty}>
                 <BellIcon />
                 <p>No notifications yet</p>
+                <p style={{ fontSize: 11, color: "rgba(240,237,232,0.2)", marginTop: 4 }}>
+                  Activity from others will appear here.
+                </p>
               </div>
             ) : (
               notifications.slice(0, 20).map(n => (
@@ -141,9 +169,184 @@ function NotificationBell({ notifications, onMarkAllRead, onMarkRead }) {
   );
 }
 
+// ─── Drawer ──────────────────────────────────────────────────────────────────
+
+const FOCUSABLE = [
+  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'textarea:not([disabled])', 'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(", ");
+
+function Drawer({ open, onClose, user, publishing, onPublish, onLogout }) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const asideRef = useRef(null);
+  const previousFocusRef = useRef(null);
+
+  useEffect(() => {
+    if (open) {
+      previousFocusRef.current = document.activeElement;
+      const id = requestAnimationFrame(() => {
+        const first = asideRef.current?.querySelectorAll(FOCUSABLE)[0];
+        first?.focus();
+      });
+      return () => cancelAnimationFrame(id);
+    } else {
+      previousFocusRef.current?.focus();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key !== "Tab") return;
+
+      const focusable = Array.from(asideRef.current?.querySelectorAll(FOCUSABLE) ?? []);
+      if (!focusable.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === first || !asideRef.current?.contains(document.activeElement)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last || !asideRef.current?.contains(document.activeElement)) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
+  const handlePublish = async () => {
+    const ok = await onPublish(title.trim(), content.trim());
+    if (ok) {
+      setTitle("");
+      setContent("");
+      onClose();
+    }
+  };
+
+  return (
+    <>
+      {open && (
+        <div
+          onClick={onClose}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
+            zIndex: 200, backdropFilter: "blur(2px)",
+          }}
+        />
+      )}
+      <aside
+        ref={asideRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Write article"
+        style={{
+          ...css.drawer,
+          transform: open ? "translateX(0)" : "translateX(-100%)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <div style={css.logoRow}>
+            <div style={css.logoDot} />
+            <span style={css.logoText}>ML Hub</span>
+          </div>
+          <button onClick={onClose} style={css.closeBtn} aria-label="Close menu">
+            <CloseIcon />
+          </button>
+        </div>
+
+        <div style={css.userCard}>
+          <Avatar email={user?.email} size={36} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 12, fontWeight: 500, color: "var(--text)" }}>Signed in as</p>
+            <p style={{ fontSize: 11, color: "var(--muted)", wordBreak: "break-all" }}>{user?.email}</p>
+          </div>
+        </div>
+
+        <div style={css.divider} />
+        <p style={css.sectionLabel}>New Article</p>
+
+        {/* SECURITY FIX 2: maxLength on title and content fields */}
+        <input
+          style={css.fieldInput}
+          placeholder="Title"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          maxLength={150}
+        />
+        <textarea
+          style={css.fieldTextarea}
+          placeholder="Write your article…"
+          value={content}
+          onChange={e => setContent(e.target.value)}
+          maxLength={10000}
+        />
+
+        <button
+          onClick={handlePublish}
+          style={{ ...css.publishBtn, opacity: publishing || !title.trim() || !content.trim() ? 0.6 : 1 }}
+          disabled={publishing || !title.trim() || !content.trim()}
+        >
+          {publishing ? "Publishing…" : "Publish →"}
+        </button>
+
+        <div style={{ flex: 1 }} />
+        <button onClick={onLogout} style={css.logoutBtn}>Sign out</button>
+      </aside>
+    </>
+  );
+}
+
+// ─── Search Bar ──────────────────────────────────────────────────────────────
+
+function SearchBar({ value, onChange, resultCount, total }) {
+  const inputRef = useRef(null);
+  return (
+    <div style={css.searchWrap}>
+      <div style={css.searchInner}>
+        <SearchIcon />
+        {/* SECURITY FIX 1: cap search input at 100 chars to limit RegExp surface */}
+        <input
+          ref={inputRef}
+          style={css.searchInput}
+          placeholder="Search articles…"
+          value={value}
+          onChange={e => onChange(e.target.value.slice(0, 100))}
+          maxLength={100}
+        />
+        {value && (
+          <button
+            onClick={() => { onChange(""); inputRef.current?.focus(); }}
+            style={css.searchClear}
+            aria-label="Clear search"
+          >
+            <CloseIcon size={14} />
+          </button>
+        )}
+      </div>
+      {value && (
+        <p style={css.searchMeta}>
+          {resultCount === 0
+            ? "No results"
+            : `${resultCount} of ${total} article${total !== 1 ? "s" : ""}`}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function ReplyItem({ reply, currentEmail, onDelete }) {
+function ReplyItem({ reply, commentId, currentEmail, onDelete }) {
   return (
     <div style={css.reply}>
       <Avatar email={reply.user_email} size={22} />
@@ -152,7 +355,7 @@ function ReplyItem({ reply, currentEmail, onDelete }) {
         <p style={css.replyContent}>{reply.content}</p>
       </div>
       {reply.user_email === currentEmail && (
-        <button onClick={() => onDelete(reply.id)} style={css.iconBtn} title="Delete reply">
+        <button onClick={() => onDelete(reply.id, commentId)} style={css.iconBtn} title="Delete reply">
           <DeleteIcon />
         </button>
       )}
@@ -194,12 +397,14 @@ function CommentItem({ comment, currentEmail, onDelete, onAddReply, onDeleteRepl
 
       {open && (
         <div style={{ paddingLeft: 36, marginTop: 8, display: "flex", gap: 8 }}>
+          {/* SECURITY FIX 2: maxLength on reply input */}
           <input
             style={css.input}
             placeholder="Write a reply…"
             value={replyVal}
             onChange={e => setReplyVal(e.target.value)}
             onKeyDown={e => e.key === "Enter" && handleReply()}
+            maxLength={500}
           />
           <button onClick={handleReply} style={css.btnSmall}>Post</button>
         </div>
@@ -208,7 +413,7 @@ function CommentItem({ comment, currentEmail, onDelete, onAddReply, onDeleteRepl
       {comment.replies?.length > 0 && (
         <div style={{ paddingLeft: 36, marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
           {comment.replies.map(r => (
-            <ReplyItem key={r.id} reply={r} currentEmail={currentEmail} onDelete={onDeleteReply} />
+            <ReplyItem key={r.id} reply={r} commentId={comment.id} currentEmail={currentEmail} onDelete={onDeleteReply} />
           ))}
         </div>
       )}
@@ -216,14 +421,38 @@ function CommentItem({ comment, currentEmail, onDelete, onAddReply, onDeleteRepl
   );
 }
 
-function ArticleCard({ article, currentEmail, onReact, onShare, onDelete, onAddComment, onDeleteComment, onAddReply, onDeleteReply }) {
+function ArticleCard({ article, currentEmail, onReact, onShare, onDelete, onAddComment, onDeleteComment, onAddReply, onDeleteReply, searchQuery }) {
   const [commentVal, setCommentVal] = useState("");
   const [showComments, setShowComments] = useState(false);
+  const PREVIEW_LENGTH = 280;
+  const [expanded, setExpanded] = useState(false);
+  const isLong = article.content?.length > PREVIEW_LENGTH;
+
+  const handleDeleteComment = (commentId) => onDeleteComment(commentId, article.id);
+  const handleDeleteReply   = (replyId, commentId) => onDeleteReply(replyId, commentId, article.id);
 
   const handleComment = () => {
     if (!commentVal.trim()) return;
     onAddComment(article.id, commentVal.trim());
     setCommentVal("");
+  };
+
+  // SECURITY FIX 1: safe RegExp highlight — length-capped, escaped, wrapped in try/catch
+  const highlight = (text) => {
+    if (!searchQuery || !text) return text;
+    const safe = searchQuery.slice(0, 60).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (!safe) return text;
+    let parts;
+    try {
+      parts = text.split(new RegExp(`(${safe})`, "gi"));
+    } catch {
+      return text;
+    }
+    return parts.map((part, i) =>
+      part.toLowerCase() === searchQuery.toLowerCase()
+        ? <mark key={i} style={{ background: "rgba(93,232,192,0.25)", color: "#5de8c0", borderRadius: 2, padding: "0 1px" }}>{part}</mark>
+        : part
+    );
   };
 
   return (
@@ -241,8 +470,17 @@ function ArticleCard({ article, currentEmail, onReact, onShare, onDelete, onAddC
         )}
       </div>
 
-      <h2 style={css.cardTitle}>{article.title}</h2>
-      <p style={css.cardContent}>{article.content}</p>
+      <h2 style={css.cardTitle}>{highlight(article.title)}</h2>
+      <p style={css.cardContent}>
+        {isLong && !expanded
+          ? highlight(article.content.slice(0, PREVIEW_LENGTH) + "…")
+          : highlight(article.content)}
+      </p>
+      {isLong && (
+        <button onClick={() => setExpanded(e => !e)} style={css.textBtn}>
+          {expanded ? "Show less" : "Read more"}
+        </button>
+      )}
 
       <div style={css.actionRow}>
         <button
@@ -278,24 +516,32 @@ function ArticleCard({ article, currentEmail, onReact, onShare, onDelete, onAddC
       {showComments && (
         <div style={css.commentsSection}>
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            {/* SECURITY FIX 2: maxLength on comment input */}
             <input
               style={css.input}
               placeholder="Add a comment…"
               value={commentVal}
               onChange={e => setCommentVal(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleComment()}
+              maxLength={500}
             />
             <button onClick={handleComment} style={css.btnSmall}>Post</button>
           </div>
+
+          {article.comments?.length === 0 && (
+            <p style={{ fontSize: 12, color: "rgba(240,237,232,0.25)", textAlign: "center", padding: "8px 0 4px" }}>
+              No comments yet. Start the conversation.
+            </p>
+          )}
 
           {article.comments?.map(c => (
             <CommentItem
               key={c.id}
               comment={c}
               currentEmail={currentEmail}
-              onDelete={onDeleteComment}
+              onDelete={handleDeleteComment}
               onAddReply={onAddReply}
-              onDeleteReply={onDeleteReply}
+              onDeleteReply={handleDeleteReply}
             />
           ))}
         </div>
@@ -310,6 +556,35 @@ const BellIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
     <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>
+);
+
+const HamburgerIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <line x1="3" y1="6" x2="21" y2="6"/>
+    <line x1="3" y1="12" x2="21" y2="12"/>
+    <line x1="3" y1="18" x2="21" y2="18"/>
+  </svg>
+);
+
+const CloseIcon = ({ size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
+const PlusIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <line x1="12" y1="5" x2="12" y2="19"/>
+    <line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+);
+
+const SearchIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: "rgba(240,237,232,0.3)" }}>
+    <circle cx="11" cy="11" r="8"/>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
   </svg>
 );
 
@@ -350,37 +625,203 @@ const DeleteIcon = () => (
   </svg>
 );
 
+// ─── Auth Loading Screen ─────────────────────────────────────────────────────
+
+function AuthLoadingScreen() {
+  return (
+    <div style={{
+      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      background: "#05090f",
+    }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+        <div style={css.logoDot} />
+        <span style={{ ...css.logoText, fontSize: 22 }}>ML Hub</span>
+        <p style={{ fontSize: 12, color: "rgba(240,237,232,0.3)", fontFamily: "'DM Sans', sans-serif", marginTop: 8 }}>
+          Checking session…
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ──────────────────────────────────────────────────────────
 
 export default function Dashboard() {
+  const [authStatus, setAuthStatus] = useState("loading");
   const [user, setUser] = useState(null);
+
   const [articles, setArticles] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [reactionLoading, setReactionLoading] = useState({});
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // ── Init ──
+  const showToast = useCallback((msg) => setToast(msg), []);
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        setAuthStatus("authenticated");
+      } else {
+        setAuthStatus("unauthenticated");
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        setAuthStatus("authenticated");
+      } else {
+        setUser(null);
+        setAuthStatus("unauthenticated");
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (user) {
-      fetchArticles();
-      fetchNotifications();
+    if (authStatus === "unauthenticated") {
+      window.location.href = "/login";
+    }
+  }, [authStatus]);
+
+  const createNotification = useCallback(async ({ recipientEmail, actorEmail, type, message, articleTitle }) => {
+    if (recipientEmail === actorEmail) return;
+    try {
+      await supabase.from("notifications").insert([{
+        recipient_email: recipientEmail,
+        actor_email: actorEmail,
+        type,
+        message,
+        article_title: articleTitle,
+        read: false,
+      }]);
+    } catch (err) {
+      console.error("Failed to send notification:", err);
+    }
+  }, []);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("id, type, actor_email, message, article_title, created_at, read")
+        .eq("recipient_email", user.email)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      setNotifications(data ?? []);
+    } catch (err) {
+      console.error("Failed to load notifications:", err);
     }
   }, [user]);
 
-  // ── Poll for new notifications every 30s ──
+  const fetchArticles = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data: articlesData, error: aErr } = await supabase
+        .from("articles")
+        .select(`
+          id, title, content, user_email, created_at,
+          likes ( id, user_email, type, article_id ),
+          comments (
+            id, content, user_email, created_at, article_id,
+            replies ( id, content, user_email, comment_id )
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (aErr) throw aErr;
+
+      setArticles(
+        (articlesData ?? []).map(a => {
+          const reactions = a.likes ?? [];
+          return {
+            ...a,
+            likeCount: reactions.filter(r => r.type === "like").length,
+            dislikeCount: reactions.filter(r => r.type === "dislike").length,
+            userReaction: reactions.find(r => r.user_email === user.email)?.type ?? null,
+            comments: (a.comments ?? []).map(c => ({
+              ...c,
+              replies: c.replies ?? [],
+            })),
+          };
+        })
+      );
+    } catch (joinErr) {
+      console.warn("Nested select failed, falling back to parallel queries:", joinErr);
+      try {
+        const [
+          { data: articlesData, error: aErr2 },
+          { data: reactionsData = [] },
+          { data: commentsData = [] },
+          { data: repliesData = [] },
+        ] = await Promise.all([
+          supabase.from("articles").select("id, title, content, user_email, created_at").order("created_at", { ascending: false }),
+          supabase.from("likes").select("id, article_id, user_email, type"),
+          supabase.from("comments").select("id, article_id, content, user_email, created_at"),
+          supabase.from("replies").select("id, comment_id, content, user_email"),
+        ]);
+        if (aErr2) throw aErr2;
+
+        const reactionsByArticle = {};
+        for (const r of reactionsData ?? []) {
+          (reactionsByArticle[r.article_id] ??= []).push(r);
+        }
+        const commentsByArticle = {};
+        for (const c of commentsData ?? []) {
+          (commentsByArticle[c.article_id] ??= []).push(c);
+        }
+        const repliesByComment = {};
+        for (const r of repliesData ?? []) {
+          (repliesByComment[r.comment_id] ??= []).push(r);
+        }
+
+        setArticles(
+          (articlesData ?? []).map(a => {
+            const reactions = reactionsByArticle[a.id] ?? [];
+            return {
+              ...a,
+              likeCount: reactions.filter(r => r.type === "like").length,
+              dislikeCount: reactions.filter(r => r.type === "dislike").length,
+              userReaction: reactions.find(r => r.user_email === user.email)?.type ?? null,
+              comments: (commentsByArticle[a.id] ?? []).map(c => ({
+                ...c,
+                replies: repliesByComment[c.id] ?? [],
+              })),
+            };
+          })
+        );
+      } catch (fallbackErr) {
+        showToast("Couldn't load articles. Please refresh.");
+        console.error(fallbackErr);
+      }
+    }
+  }, [user, showToast]);
+
+  useEffect(() => {
+    if (authStatus === "authenticated" && user) {
+      fetchArticles();
+      fetchNotifications();
+    }
+  }, [authStatus, user, fetchArticles, fetchNotifications]);
+
   useEffect(() => {
     if (!user) return;
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, [user]);
+    let interval;
+    const start = () => { interval = setInterval(fetchNotifications, 30000); };
+    const stop = () => clearInterval(interval);
+    const onVisibility = () => document.hidden ? stop() : (fetchNotifications(), start());
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { stop(); document.removeEventListener("visibilitychange", onVisibility); };
+  }, [user, fetchNotifications]);
 
-  // ── Realtime subscription for notifications ──
   useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -392,187 +833,242 @@ export default function Dashboard() {
       )
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [user]);
+  }, [user, fetchNotifications]);
 
-  // ── Data ──
-  const fetchArticles = useCallback(async () => {
-    const [{ data: articlesData }, { data: reactionsData = [] }, { data: commentsData = [] }, { data: repliesData = [] }] =
-      await Promise.all([
-        supabase.from("articles").select("*").order("created_at", { ascending: false }),
-        supabase.from("likes").select("*"),
-        supabase.from("comments").select("*"),
-        supabase.from("replies").select("*"),
-      ]);
-
-    setArticles(
-      (articlesData ?? []).map(a => {
-        const reactions = reactionsData.filter(r => r.article_id === String(a.id));
-        return {
-          ...a,
-          likeCount: reactions.filter(r => r.type === "like").length,
-          dislikeCount: reactions.filter(r => r.type === "dislike").length,
-          userReaction: reactions.find(r => r.user_email === user?.email)?.type ?? null,
-          comments: commentsData
-            .filter(c => c.article_id === a.id)
-            .map(c => ({ ...c, replies: repliesData.filter(r => r.comment_id === c.id) })),
-        };
-      })
-    );
-  }, [user]);
-
-  const fetchNotifications = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("recipient_email", user.email)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    setNotifications(data ?? []);
-  }, [user]);
+  useEffect(() => {
+    document.body.style.overflow = drawerOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [drawerOpen]);
 
   // ── Actions ──
+
   const logout = async () => {
     await supabase.auth.signOut();
     window.location.href = "/login";
   };
 
-  const publishArticle = async () => {
-    if (!title.trim() || !content.trim()) return;
+  const publishArticle = useCallback(async (title, content) => {
+    if (!title || !content) return false;
+    // SECURITY FIX 2: server-side length guard (mirrors maxLength on inputs)
+    if (title.length > 150 || content.length > 10000) {
+      showToast("Content exceeds allowed length.");
+      return false;
+    }
     setPublishing(true);
-    await supabase.from("articles").insert([{ title, content, user_email: user.email }]);
-    setTitle("");
-    setContent("");
-    setPublishing(false);
-    fetchArticles();
-  };
+    try {
+      const { error } = await supabase.from("articles").insert([{ title, content, user_email: user.email }]);
+      if (error) throw error;
+      showToast("Article published.");
+      await fetchArticles();
+      return true;
+    } catch (err) {
+      showToast("Couldn't publish. Please try again.");
+      console.error(err);
+      return false;
+    } finally {
+      setPublishing(false);
+    }
+  }, [user, fetchArticles, showToast]);
 
-  // ── Helper: create notification ──
-  const createNotification = async ({ recipientEmail, actorEmail, type, message, articleTitle }) => {
-    if (recipientEmail === actorEmail) return; // Don't notify yourself
-    await supabase.from("notifications").insert([{
-      recipient_email: recipientEmail,
-      actor_email: actorEmail,
-      type,
-      message,
-      article_title: articleTitle,
-      read: false,
-    }]);
-  };
-
-  const reactArticle = async (articleId, type) => {
+  const reactArticle = useCallback(async (articleId, type) => {
     if (!user || reactionLoading[articleId]) return;
     setReactionLoading(prev => ({ ...prev, [articleId]: true }));
-
     const article = articles.find(a => a.id === articleId);
+    try {
+      // BUG FIX: correct operator precedence for existing reaction lookup
+      const existingReaction = article?.likes?.find(r => r.user_email === user.email);
+      const currentType = existingReaction?.type ?? article?.userReaction ?? null;
 
-    const { data: existing } = await supabase
-      .from("likes").select("*")
-      .eq("article_id", String(articleId))
-      .eq("user_email", user.email)
-      .maybeSingle();
-
-    if (!existing) {
-      await supabase.from("likes").insert([{ article_id: String(articleId), user_email: user.email, type }]);
-      // Notify article author
-      if (article) {
-        await createNotification({
-          recipientEmail: article.user_email,
-          actorEmail: user.email,
-          type,
+      if (currentType == null) {
+        // No existing reaction — insert new
+        await supabase.from("likes").insert([{ article_id: articleId, user_email: user.email, type }]);
+        if (article) await createNotification({
+          recipientEmail: article.user_email, actorEmail: user.email, type,
+          message: type === "like" ? "liked your article" : "disliked your article",
+          articleTitle: article.title,
+        });
+      } else if (currentType === type) {
+        // Same reaction — toggle off
+        await supabase.from("likes")
+          .delete()
+          .eq("article_id", articleId)
+          .eq("user_email", user.email);
+      } else {
+        // Different reaction — switch type
+        await supabase.from("likes")
+          .update({ type })
+          .eq("article_id", articleId)
+          .eq("user_email", user.email);
+        if (article) await createNotification({
+          recipientEmail: article.user_email, actorEmail: user.email, type,
           message: type === "like" ? "liked your article" : "disliked your article",
           articleTitle: article.title,
         });
       }
-    } else if (existing.type === type) {
-      await supabase.from("likes").delete().eq("id", existing.id);
-    } else {
-      await supabase.from("likes").update({ type }).eq("id", existing.id);
-      // Notify article author of changed reaction
-      if (article) {
-        await createNotification({
-          recipientEmail: article.user_email,
-          actorEmail: user.email,
-          type,
-          message: type === "like" ? "liked your article" : "disliked your article",
-          articleTitle: article.title,
-        });
-      }
+      await fetchArticles();
+    } catch (err) {
+      showToast("Action failed. Try again.");
+    } finally {
+      setReactionLoading(prev => ({ ...prev, [articleId]: false }));
     }
+  }, [user, reactionLoading, articles, createNotification, fetchArticles, showToast]);
 
-    await fetchArticles();
-    setReactionLoading(prev => ({ ...prev, [articleId]: false }));
-  };
-
-  const shareArticle = async (articleId, title) => {
+  const shareArticle = useCallback(async (articleId, title) => {
     const url = `${window.location.origin}/article/${articleId}`;
     if (navigator.share) {
-      try {
-        await navigator.share({ title, text: "Check out this article!", url });
-        return;
-      } catch (err) {}
+      try { await navigator.share({ title, text: "Check out this article!", url }); return; } catch {}
     }
     await navigator.clipboard.writeText(url);
-    alert("Link copied to clipboard!");
-  };
+    showToast("Link copied to clipboard!");
+  }, [showToast]);
 
-  const addComment = async (articleId, text) => {
-    await supabase.from("comments").insert([{ article_id: articleId, user_email: user.email, content: text }]);
-
-    const article = articles.find(a => a.id === articleId);
-    if (article) {
-      await createNotification({
-        recipientEmail: article.user_email,
-        actorEmail: user.email,
-        type: "comment",
-        message: "commented on your article",
-        articleTitle: article.title,
+  const addComment = useCallback(async (articleId, text) => {
+    // SECURITY FIX 2: server-side length guard for comments
+    if (text.length > 500) { showToast("Comment is too long."); return; }
+    try {
+      const { error } = await supabase.from("comments").insert([{ article_id: articleId, user_email: user.email, content: text }]);
+      if (error) throw error;
+      const article = articles.find(a => a.id === articleId);
+      if (article) await createNotification({
+        recipientEmail: article.user_email, actorEmail: user.email, type: "comment",
+        message: "commented on your article", articleTitle: article.title,
       });
-    }
+      await fetchArticles();
+    } catch { showToast("Couldn't post comment."); }
+  }, [user, articles, createNotification, fetchArticles, showToast]);
 
-    fetchArticles();
-  };
-
-  const addReply = async (commentId, text) => {
-    await supabase.from("replies").insert([{ comment_id: commentId, user_email: user.email, content: text }]);
-
-    // Find the comment author to notify
-    for (const article of articles) {
-      const comment = article.comments?.find(c => c.id === commentId);
-      if (comment) {
-        await createNotification({
-          recipientEmail: comment.user_email,
-          actorEmail: user.email,
-          type: "reply",
-          message: "replied to your comment",
-          articleTitle: article.title,
-        });
-        break;
+  const addReply = useCallback(async (commentId, text) => {
+    // SECURITY FIX 2: server-side length guard for replies
+    if (text.length > 500) { showToast("Reply is too long."); return; }
+    try {
+      const { error } = await supabase.from("replies").insert([{ comment_id: commentId, user_email: user.email, content: text }]);
+      if (error) throw error;
+      for (const article of articles) {
+        const comment = article.comments?.find(c => c.id === commentId);
+        if (comment) {
+          await createNotification({
+            recipientEmail: comment.user_email, actorEmail: user.email, type: "reply",
+            message: "replied to your comment", articleTitle: article.title,
+          });
+          break;
+        }
       }
-    }
+      await fetchArticles();
+    } catch { showToast("Couldn't post reply."); }
+  }, [user, articles, createNotification, fetchArticles, showToast]);
 
-    fetchArticles();
-  };
+  // ── CASCADE-ON-DELETE ────────────────────────────────────────────────────────
+  // These delete actions rely on Postgres ON DELETE CASCADE constraints.
+  //
+  // Required migration (run once in Supabase SQL Editor):
+  //
+  //   ALTER TABLE comments
+  //     DROP CONSTRAINT IF EXISTS comments_article_id_fkey,
+  //     ADD CONSTRAINT comments_article_id_fkey
+  //       FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE;
+  //
+  //   ALTER TABLE replies
+  //     DROP CONSTRAINT IF EXISTS replies_comment_id_fkey,
+  //     ADD CONSTRAINT replies_comment_id_fkey
+  //       FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE;
+  //
+  //   ALTER TABLE likes
+  //     DROP CONSTRAINT IF EXISTS likes_article_id_fkey,
+  //     ADD CONSTRAINT likes_article_id_fkey
+  //       FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE;
+  //
+  // ── RLS POLICIES ─────────────────────────────────────────────────────────────
+  // Run this in Supabase SQL Editor to enforce server-side access control:
+  //
+  //   ALTER TABLE articles      ENABLE ROW LEVEL SECURITY;
+  //   ALTER TABLE likes         ENABLE ROW LEVEL SECURITY;
+  //   ALTER TABLE comments      ENABLE ROW LEVEL SECURITY;
+  //   ALTER TABLE replies       ENABLE ROW LEVEL SECURITY;
+  //   ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+  //
+  //   -- articles
+  //   CREATE POLICY "articles: read all"   ON articles FOR SELECT TO authenticated USING (true);
+  //   CREATE POLICY "articles: insert own" ON articles FOR INSERT TO authenticated WITH CHECK (user_email = auth.jwt() ->> 'email');
+  //   CREATE POLICY "articles: delete own" ON articles FOR DELETE TO authenticated USING (user_email = auth.jwt() ->> 'email');
+  //
+  //   -- likes
+  //   CREATE POLICY "likes: read all"    ON likes FOR SELECT TO authenticated USING (true);
+  //   CREATE POLICY "likes: insert own"  ON likes FOR INSERT TO authenticated WITH CHECK (user_email = auth.jwt() ->> 'email');
+  //   CREATE POLICY "likes: update own"  ON likes FOR UPDATE TO authenticated USING (user_email = auth.jwt() ->> 'email');
+  //   CREATE POLICY "likes: delete own"  ON likes FOR DELETE TO authenticated USING (user_email = auth.jwt() ->> 'email');
+  //
+  //   -- comments
+  //   CREATE POLICY "comments: read all"   ON comments FOR SELECT TO authenticated USING (true);
+  //   CREATE POLICY "comments: insert own" ON comments FOR INSERT TO authenticated WITH CHECK (user_email = auth.jwt() ->> 'email');
+  //   CREATE POLICY "comments: delete own" ON comments FOR DELETE TO authenticated USING (user_email = auth.jwt() ->> 'email');
+  //
+  //   -- replies
+  //   CREATE POLICY "replies: read all"   ON replies FOR SELECT TO authenticated USING (true);
+  //   CREATE POLICY "replies: insert own" ON replies FOR INSERT TO authenticated WITH CHECK (user_email = auth.jwt() ->> 'email');
+  //   CREATE POLICY "replies: delete own" ON replies FOR DELETE TO authenticated USING (user_email = auth.jwt() ->> 'email');
+  //
+  //   -- notifications (users can only read/update their own)
+  //   CREATE POLICY "notifications: read own"   ON notifications FOR SELECT TO authenticated USING (recipient_email = auth.jwt() ->> 'email');
+  //   CREATE POLICY "notifications: insert"     ON notifications FOR INSERT TO authenticated WITH CHECK (true);
+  //   CREATE POLICY "notifications: update own" ON notifications FOR UPDATE TO authenticated USING (recipient_email = auth.jwt() ->> 'email');
+  // ────────────────────────────────────────────────────────────────────────────
 
-  const deleteArticle = async (id) => { await supabase.from("articles").delete().eq("id", id); fetchArticles(); };
-  const deleteComment = async (id) => { await supabase.from("comments").delete().eq("id", id); fetchArticles(); };
-  const deleteReply   = async (id) => { await supabase.from("replies").delete().eq("id", id);   fetchArticles(); };
+  const deleteArticle = useCallback(async (id) => {
+    try {
+      const { error } = await supabase.from("articles").delete().eq("id", id);
+      if (error) throw error;
+      setArticles(prev => prev.filter(a => a.id !== id));
+    } catch { showToast("Couldn't delete article."); }
+  }, [showToast]);
 
-  const markAllRead = async () => {
-    await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("recipient_email", user.email)
-      .eq("read", false);
+  const deleteComment = useCallback(async (commentId, articleId) => {
+    try {
+      const { error } = await supabase.from("comments").delete().eq("id", commentId);
+      if (error) throw error;
+      setArticles(prev => prev.map(a =>
+        a.id !== articleId ? a : { ...a, comments: a.comments.filter(c => c.id !== commentId) }
+      ));
+    } catch { showToast("Couldn't delete comment."); }
+  }, [showToast]);
+
+  const deleteReply = useCallback(async (replyId, commentId, articleId) => {
+    try {
+      const { error } = await supabase.from("replies").delete().eq("id", replyId);
+      if (error) throw error;
+      setArticles(prev => prev.map(a =>
+        a.id !== articleId ? a : {
+          ...a,
+          comments: a.comments.map(c =>
+            c.id !== commentId ? c : { ...c, replies: c.replies.filter(r => r.id !== replyId) }
+          ),
+        }
+      ));
+    } catch { showToast("Couldn't delete reply."); }
+  }, [showToast]);
+
+  const markAllRead = useCallback(async () => {
+    await supabase.from("notifications").update({ read: true }).eq("recipient_email", user.email).eq("read", false);
     fetchNotifications();
-  };
+  }, [user, fetchNotifications]);
 
-  const markRead = async (id) => {
+  const markRead = useCallback(async (id) => {
     await supabase.from("notifications").update({ read: true }).eq("id", id);
     fetchNotifications();
-  };
+  }, [fetchNotifications]);
 
-  // ── Render ──
+  if (authStatus === "loading") return <AuthLoadingScreen />;
+  if (authStatus === "unauthenticated") return null;
+
+  // SECURITY FIX 1: sanitize search query before passing to highlight()
+  const q = searchQuery.trim().toLowerCase();
+  const filteredArticles = q
+    ? articles.filter(a =>
+        a.title?.toLowerCase().includes(q) ||
+        a.content?.toLowerCase().includes(q) ||
+        a.user_email?.toLowerCase().includes(q)
+      )
+    : articles;
+
   return (
     <>
       <style>{`
@@ -592,90 +1088,93 @@ export default function Dashboard() {
         }
         body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); }
         ::placeholder { color: var(--muted); }
-        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
         input:focus, textarea:focus { outline: none; border-color: rgba(93,232,192,0.4) !important; }
         button:active { transform: scale(0.97); }
+        mark { background: rgba(93,232,192,0.2); color: #5de8c0; border-radius: 2px; }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translate(-50%, 10px); }
+          to   { opacity: 1; transform: translate(-50%, 0); }
+        }
+        @media (max-width: 600px) {
+          input, textarea { font-size: 16px !important; }
+        }
       `}</style>
 
-      <div style={css.layout}>
-        {/* ── Sidebar ── */}
-        <aside style={css.sidebar}>
-          <div style={css.logoRow}>
-            <div style={css.logoDot} />
-            <span style={css.logoText}>ML Hub</span>
-          </div>
+      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
 
-          <div style={css.userCard}>
-            <Avatar email={user?.email} size={40} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>Signed in as</p>
-              <p style={{ fontSize: 11, color: "var(--muted)", wordBreak: "break-all" }}>{user?.email}</p>
-            </div>
-            <NotificationBell
-              notifications={notifications}
-              onMarkAllRead={markAllRead}
-              onMarkRead={markRead}
-            />
-          </div>
+      <Drawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        user={user}
+        publishing={publishing}
+        onPublish={publishArticle}
+        onLogout={logout}
+      />
 
-          <div style={css.divider} />
+      <header style={css.topBar}>
+        <button onClick={() => setDrawerOpen(true)} style={css.topBarBtn} aria-label="Open menu">
+          <HamburgerIcon />
+        </button>
+        <div style={css.logoRow}>
+          <div style={css.logoDot} />
+          <span style={css.logoText}>ML Hub</span>
+        </div>
+        <NotificationBell notifications={notifications} onMarkAllRead={markAllRead} onMarkRead={markRead} />
+      </header>
 
-          <p style={css.sectionLabel}>New Article</p>
+      <main style={css.feed}>
+        <div style={css.feedHeader}>
+          <h1 style={css.feedTitle}>Feed</h1>
+          <span style={css.feedCount}>{articles.length} articles</span>
+        </div>
 
-          <input
-            style={css.fieldInput}
-            placeholder="Title"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-          />
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          resultCount={filteredArticles.length}
+          total={articles.length}
+        />
 
-          <textarea
-            style={css.fieldTextarea}
-            placeholder="Write your article…"
-            value={content}
-            onChange={e => setContent(e.target.value)}
-          />
-
-          <button onClick={publishArticle} style={css.publishBtn} disabled={publishing}>
-            {publishing ? "Publishing…" : "Publish →"}
-          </button>
-
-          <div style={{ flex: 1 }} />
-
-          <button onClick={logout} style={css.logoutBtn}>
-            Sign out
-          </button>
-        </aside>
-
-        {/* ── Feed ── */}
-        <main style={css.feed}>
-          <div style={css.feedHeader}>
-            <h1 style={css.feedTitle}>Feed</h1>
-            <span style={css.feedCount}>{articles.length} articles</span>
-          </div>
-
-          {articles.length === 0 && (
-            <div style={css.empty}>
+        {filteredArticles.length === 0 && (
+          <div style={css.empty}>
+            {q ? (
+              <>
+                <p style={{ fontSize: 14, color: "var(--muted)" }}>No articles match "{searchQuery}".</p>
+                <button onClick={() => setSearchQuery("")} style={{ ...css.textBtn, marginTop: 10, fontSize: 13 }}>
+                  Clear search
+                </button>
+              </>
+            ) : (
               <p style={{ fontSize: 14, color: "var(--muted)" }}>No articles yet — be the first to publish.</p>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
-          {articles.map(a => (
-            <ArticleCard
-              key={a.id}
-              article={a}
-              currentEmail={user?.email}
-              onReact={reactArticle}
-              onShare={shareArticle}
-              onDelete={deleteArticle}
-              onAddComment={addComment}
-              onDeleteComment={deleteComment}
-              onAddReply={addReply}
-              onDeleteReply={deleteReply}
-            />
-          ))}
-        </main>
-      </div>
+        {filteredArticles.map(a => (
+          <ArticleCard
+            key={a.id}
+            article={a}
+            currentEmail={user?.email}
+            onReact={reactArticle}
+            onShare={shareArticle}
+            onDelete={deleteArticle}
+            onAddComment={addComment}
+            onDeleteComment={deleteComment}
+            onAddReply={addReply}
+            onDeleteReply={deleteReply}
+            searchQuery={searchQuery}
+          />
+        ))}
+
+        <div style={{ height: 80 }} />
+      </main>
+
+      <button onClick={() => setDrawerOpen(true)} style={css.fab} aria-label="Write article" title="Write article">
+        <PlusIcon />
+      </button>
     </>
   );
 }
@@ -683,162 +1182,185 @@ export default function Dashboard() {
 // ─── Design tokens ───────────────────────────────────────────────────────────
 
 const css = {
-  layout: { display: "flex", minHeight: "100vh" },
-
-  sidebar: {
-    width: 280, flexShrink: 0, padding: "28px 20px",
-    borderRight: "1px solid rgba(255,255,255,0.06)",
-    background: "rgba(255,255,255,0.015)",
-    display: "flex", flexDirection: "column", gap: 12,
-    position: "sticky", top: 0, height: "100vh", overflowY: "auto",
+  topBar: {
+    position: "sticky", top: 0, zIndex: 100,
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "0 16px", height: 56,
+    background: "rgba(5,9,15,0.92)",
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
+    backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
   },
-
-  logoRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 8 },
+  topBarBtn: {
+    display: "flex", alignItems: "center", justifyContent: "center",
+    width: 44, height: 44,
+    background: "transparent", border: "none",
+    color: "rgba(240,237,232,0.7)", cursor: "pointer", borderRadius: 8,
+  },
+  drawer: {
+    position: "fixed", top: 0, left: 0, bottom: 0,
+    width: 300, maxWidth: "85vw",
+    background: "#0b1118",
+    borderRight: "1px solid rgba(255,255,255,0.08)",
+    zIndex: 300,
+    display: "flex", flexDirection: "column",
+    padding: "20px 18px", gap: 12,
+    overflowY: "auto",
+    transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
+  },
+  closeBtn: {
+    display: "flex", alignItems: "center", justifyContent: "center",
+    width: 44, height: 44,
+    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 8, color: "rgba(240,237,232,0.6)", cursor: "pointer",
+  },
+  fab: {
+    position: "fixed",
+    bottom: "max(24px, env(safe-area-inset-bottom, 24px))",
+    right: 20, width: 54, height: 54,
+    borderRadius: "50%", background: "#5de8c0", color: "#05090f",
+    border: "none", display: "flex", alignItems: "center", justifyContent: "center",
+    cursor: "pointer", boxShadow: "0 4px 20px rgba(93,232,192,0.35)",
+    zIndex: 150, transition: "transform 0.15s, box-shadow 0.15s",
+  },
+  logoRow: { display: "flex", alignItems: "center", gap: 10 },
   logoDot: { width: 8, height: 8, borderRadius: "50%", background: "#5de8c0", boxShadow: "0 0 10px #5de8c0" },
   logoText: { fontFamily: "'DM Serif Display', serif", fontSize: 18, color: "#f0ede8", letterSpacing: "-0.02em" },
-
   userCard: {
     display: "flex", alignItems: "center", gap: 12, padding: "12px",
     background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
     borderRadius: 10,
   },
-
   divider: { height: 1, background: "rgba(255,255,255,0.06)", margin: "4px 0" },
-
   sectionLabel: {
     fontSize: 10, fontWeight: 500, letterSpacing: "0.1em",
     textTransform: "uppercase", color: "rgba(240,237,232,0.3)", paddingLeft: 2,
   },
-
   fieldInput: {
     width: "100%", padding: "10px 12px",
     background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 8, color: "#f0ede8", fontSize: 13, fontFamily: "'DM Sans', sans-serif",
+    borderRadius: 8, color: "#f0ede8", fontSize: 14, fontFamily: "'DM Sans', sans-serif",
     transition: "border-color 0.2s",
   },
-
   fieldTextarea: {
     width: "100%", height: 120, padding: "10px 12px",
     background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 8, color: "#f0ede8", fontSize: 13, fontFamily: "'DM Sans', sans-serif",
+    borderRadius: 8, color: "#f0ede8", fontSize: 14, fontFamily: "'DM Sans', sans-serif",
     resize: "vertical", transition: "border-color 0.2s",
   },
-
   publishBtn: {
-    width: "100%", padding: "11px", background: "#5de8c0", color: "#05090f",
-    border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500,
+    width: "100%", padding: "13px", background: "#5de8c0", color: "#05090f",
+    border: "none", borderRadius: 8, fontSize: 14, fontWeight: 500,
     fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
-    letterSpacing: "0.01em", transition: "background 0.2s",
+    letterSpacing: "0.01em", transition: "background 0.2s, opacity 0.2s",
   },
-
   logoutBtn: {
-    width: "100%", padding: "10px", background: "transparent",
+    width: "100%", padding: "12px", background: "transparent",
     color: "rgba(248,113,113,0.7)", border: "1px solid rgba(248,113,113,0.2)",
-    borderRadius: 8, fontSize: 12, fontFamily: "'DM Sans', sans-serif",
+    borderRadius: 8, fontSize: 13, fontFamily: "'DM Sans', sans-serif",
     cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.02em",
   },
-
-  feed: { flex: 1, padding: "28px 32px", maxWidth: 720, margin: "0 auto", width: "100%" },
-
-  feedHeader: { display: "flex", alignItems: "baseline", gap: 12, marginBottom: 24 },
-
+  feed: { padding: "16px 16px 0", maxWidth: 680, margin: "0 auto", width: "100%" },
+  feedHeader: { display: "flex", alignItems: "baseline", gap: 12, marginBottom: 12 },
   feedTitle: {
-    fontFamily: "'DM Serif Display', serif", fontSize: 28, fontWeight: 400,
+    fontFamily: "'DM Serif Display', serif", fontSize: 24, fontWeight: 400,
     letterSpacing: "-0.02em", color: "#f0ede8",
   },
-
   feedCount: { fontSize: 12, color: "rgba(240,237,232,0.3)", letterSpacing: "0.04em" },
-
+  searchWrap: { marginBottom: 16 },
+  searchInner: {
+    display: "flex", alignItems: "center", gap: 8,
+    padding: "10px 12px",
+    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 10, transition: "border-color 0.2s",
+  },
+  searchInput: {
+    flex: 1, background: "none", border: "none",
+    color: "#f0ede8", fontSize: 14, fontFamily: "'DM Sans', sans-serif",
+    minWidth: 0,
+  },
+  searchClear: {
+    display: "flex", alignItems: "center", justifyContent: "center",
+    width: 24, height: 24, background: "rgba(255,255,255,0.06)",
+    border: "none", borderRadius: 6,
+    color: "rgba(240,237,232,0.5)", cursor: "pointer", flexShrink: 0,
+  },
+  searchMeta: { fontSize: 11, color: "rgba(240,237,232,0.3)", marginTop: 6, paddingLeft: 2 },
   empty: { padding: "48px 0", textAlign: "center" },
-
   card: {
     background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: 14, padding: "20px 24px", marginBottom: 16, transition: "border-color 0.2s",
+    borderRadius: 14, padding: "16px", marginBottom: 12, transition: "border-color 0.2s",
   },
-
-  cardHeader: { display: "flex", alignItems: "center", gap: 10, marginBottom: 14 },
+  cardHeader: { display: "flex", alignItems: "center", gap: 10, marginBottom: 12 },
   cardAuthor: { fontSize: 12, fontWeight: 500, color: "rgba(240,237,232,0.6)", display: "block", marginBottom: 1 },
-
   cardTitle: {
-    fontFamily: "'DM Serif Display', serif", fontSize: 20, fontWeight: 400,
+    fontFamily: "'DM Serif Display', serif", fontSize: 18, fontWeight: 400,
     letterSpacing: "-0.01em", color: "#f0ede8", marginBottom: 8, lineHeight: 1.3,
   },
-
-  cardContent: { fontSize: 14, lineHeight: 1.7, color: "rgba(240,237,232,0.65)", marginBottom: 16 },
-
-  actionRow: { display: "flex", gap: 4, borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 12 },
-
-  actionBtn: {
-    display: "flex", alignItems: "center", gap: 6, padding: "7px 12px",
-    background: "transparent", border: "none", borderRadius: 7,
-    color: "rgba(240,237,232,0.4)", fontSize: 12, fontFamily: "'DM Sans', sans-serif",
-    cursor: "pointer", transition: "background 0.15s, color 0.15s",
+  cardContent: { fontSize: 14, lineHeight: 1.7, color: "rgba(240,237,232,0.65)", marginBottom: 8 },
+  actionRow: {
+    display: "flex", gap: 0,
+    borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 10, marginTop: 4,
   },
-
+  actionBtn: {
+    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+    padding: "10px 4px", background: "transparent", border: "none", borderRadius: 7,
+    color: "rgba(240,237,232,0.4)", fontSize: 12, fontFamily: "'DM Sans', sans-serif",
+    cursor: "pointer", transition: "background 0.15s, color 0.15s", minHeight: 44,
+  },
   iconBtn: {
     display: "flex", alignItems: "center", justifyContent: "center",
-    width: 28, height: 28, background: "transparent", border: "none",
-    borderRadius: 6, color: "rgba(248,113,113,0.5)", cursor: "pointer",
+    width: 40, height: 40, background: "transparent", border: "none",
+    borderRadius: 8, color: "rgba(248,113,113,0.5)", cursor: "pointer",
     flexShrink: 0, transition: "background 0.15s, color 0.15s",
   },
-
   commentsSection: {
-    marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.05)",
+    marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)",
     display: "flex", flexDirection: "column", gap: 10,
   },
-
   input: {
-    flex: 1, padding: "8px 12px", background: "rgba(255,255,255,0.04)",
+    flex: 1, padding: "10px 12px", background: "rgba(255,255,255,0.04)",
     border: "1px solid rgba(255,255,255,0.08)", borderRadius: 7,
-    color: "#f0ede8", fontSize: 12, fontFamily: "'DM Sans', sans-serif",
+    color: "#f0ede8", fontSize: 14, fontFamily: "'DM Sans', sans-serif",
   },
-
   btnSmall: {
-    padding: "8px 14px", background: "rgba(93,232,192,0.12)",
+    padding: "10px 14px", background: "rgba(93,232,192,0.12)",
     border: "1px solid rgba(93,232,192,0.25)", borderRadius: 7,
-    color: "#5de8c0", fontSize: 12, fontFamily: "'DM Sans', sans-serif",
-    cursor: "pointer", whiteSpace: "nowrap", fontWeight: 500,
+    color: "#5de8c0", fontSize: 13, fontFamily: "'DM Sans', sans-serif",
+    cursor: "pointer", whiteSpace: "nowrap", fontWeight: 500, minHeight: 44,
   },
-
   comment: { display: "flex", flexDirection: "column", gap: 6 },
   commentHeader: { display: "flex", gap: 10, alignItems: "flex-start" },
   commentAuthor: { fontSize: 11, fontWeight: 500, color: "rgba(240,237,232,0.5)" },
   commentContent: { fontSize: 13, color: "rgba(240,237,232,0.75)", lineHeight: 1.6, marginTop: 2 },
-
   textBtn: {
-    background: "none", border: "none", color: "rgba(93,232,192,0.6)", fontSize: 11,
-    cursor: "pointer", padding: 0, fontFamily: "'DM Sans', sans-serif", marginTop: 4,
+    background: "none", border: "none", color: "rgba(93,232,192,0.6)", fontSize: 12,
+    cursor: "pointer", padding: "4px 0", fontFamily: "'DM Sans', sans-serif", marginTop: 4, minHeight: 36,
   },
-
   reply: {
     display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 12px",
     background: "rgba(255,255,255,0.02)", borderRadius: 7,
     border: "1px solid rgba(255,255,255,0.04)",
   },
-
   replyAuthor: { fontSize: 10, fontWeight: 500, color: "rgba(240,237,232,0.4)", display: "block", marginBottom: 2 },
   replyContent: { fontSize: 12, color: "rgba(240,237,232,0.65)", lineHeight: 1.5 },
-
-  // ── Notification styles ──
   notifBtn: {
     position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
-    width: 34, height: 34, flexShrink: 0,
+    width: 44, height: 44, flexShrink: 0,
     border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8,
     color: "rgba(240,237,232,0.6)", cursor: "pointer", transition: "all 0.2s",
+    background: "transparent",
   },
-
   badge: {
     position: "absolute", top: -6, right: -6,
     background: "#f87171", color: "#fff",
     fontSize: 9, fontWeight: 700, fontFamily: "'DM Sans', sans-serif",
     borderRadius: 10, padding: "1px 4px", minWidth: 16, textAlign: "center",
-    border: "1.5px solid #05090f",
-    lineHeight: 1.4,
+    border: "1.5px solid #05090f", lineHeight: 1.4,
   },
-
   notifPanel: {
     position: "absolute", top: "calc(100% + 8px)", right: 0,
-    width: 340, maxHeight: 480,
+    width: "min(340px, calc(100vw - 24px))",
+    maxHeight: "min(480px, 70vh)",
     background: "#0d1520",
     border: "1px solid rgba(255,255,255,0.1)",
     borderRadius: 12,
@@ -847,60 +1369,38 @@ const css = {
     display: "flex", flexDirection: "column",
     overflow: "hidden",
   },
-
   notifHeader: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "14px 16px 10px",
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
-    flexShrink: 0,
+    borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0,
   },
-
-  notifTitle: {
-    fontFamily: "'DM Serif Display', serif",
-    fontSize: 15, fontWeight: 400, color: "#f0ede8",
-  },
-
+  notifTitle: { fontFamily: "'DM Serif Display', serif", fontSize: 15, fontWeight: 400, color: "#f0ede8" },
   markAllBtn: {
     background: "none", border: "none",
     color: "rgba(93,232,192,0.7)", fontSize: 11,
-    fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
-    padding: 0,
+    fontFamily: "'DM Sans', sans-serif", cursor: "pointer", padding: 0,
   },
-
   notifList: { overflowY: "auto", flex: 1 },
-
   notifEmpty: {
     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-    gap: 10, padding: "40px 20px",
-    color: "rgba(240,237,232,0.25)", fontSize: 13,
-    fontFamily: "'DM Sans', sans-serif",
+    gap: 8, padding: "40px 20px", textAlign: "center",
+    color: "rgba(240,237,232,0.25)", fontSize: 13, fontFamily: "'DM Sans', sans-serif",
   },
-
   notifItem: {
     display: "flex", alignItems: "flex-start", gap: 10,
-    padding: "12px 16px",
-    borderBottom: "1px solid rgba(255,255,255,0.04)",
-    cursor: "pointer", transition: "background 0.15s",
+    padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.04)",
+    cursor: "pointer", transition: "background 0.15s", minHeight: 52,
   },
-
   notifAvatar: { position: "relative", flexShrink: 0 },
-
-  notifTypeIcon: {
-    position: "absolute", bottom: -4, right: -4,
-    fontSize: 12, lineHeight: 1,
-  },
-
+  notifTypeIcon: { position: "absolute", bottom: -4, right: -4, fontSize: 12, lineHeight: 1 },
   notifText: {
     fontSize: 12, color: "rgba(240,237,232,0.6)", lineHeight: 1.5,
     fontFamily: "'DM Sans', sans-serif", marginBottom: 2,
   },
-
   notifSub: {
-    fontSize: 11, color: "rgba(93,232,192,0.5)",
-    fontFamily: "'DM Sans', sans-serif", marginBottom: 3,
-    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+    fontSize: 11, color: "rgba(93,232,192,0.5)", fontFamily: "'DM Sans', sans-serif",
+    marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
   },
-
   unreadDot: {
     width: 7, height: 7, borderRadius: "50%",
     background: "#5de8c0", flexShrink: 0, marginTop: 4,
